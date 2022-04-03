@@ -5,21 +5,37 @@
 
 #include <cstdint>
 #include <string>
+#include <set>
 
 //! \brief A class that assembles a series of excerpts from a byte stream (possibly out of order,
 //! possibly overlapping) into an in-order byte stream.
 class StreamReassembler {
+
+    class Segment {
+        public:
+            std::string _data;
+            size_t _index;
+            bool operator<(const Segment& rhs) const { return _index < rhs._index; }
+    };
+
   private:
     // Your code here -- add private members as necessary.
 
+    std::set<Segment> _unassembled; //!< The unassembled segments
     ByteStream _output;  //!< The reassembled in-order byte stream
     size_t _capacity;    //!< The maximum number of bytes
+    size_t _unassembled_bytes {0};
+    size_t _eof {static_cast<size_t>(-1)};
+
+    size_t _first_unread {0};
+    size_t _first_unassembled { _first_unread + _output.buffer_size() };
+    size_t _first_unacceptable { _first_unread + _capacity };
 
   public:
     //! \brief Construct a `StreamReassembler` that will store up to `capacity` bytes.
     //! \note This capacity limits both the bytes that have been reassembled,
     //! and those that have not yet been reassembled.
-    StreamReassembler(const size_t capacity);
+    explicit StreamReassembler(size_t capacity);
 
     //! \brief Receive a substring and write any newly contiguous bytes into the stream.
     //!
@@ -29,7 +45,7 @@ class StreamReassembler {
     //! \param data the substring
     //! \param index indicates the index (place in sequence) of the first byte in `data`
     //! \param eof the last byte of `data` will be the last byte in the entire stream
-    void push_substring(const std::string &data, const uint64_t index, const bool eof);
+    void push_substring(const std::string &data, size_t index, bool eof);
 
     //! \name Access the reassembled byte stream
     //!@{
@@ -46,6 +62,13 @@ class StreamReassembler {
     //! \brief Is the internal state empty (other than the output stream)?
     //! \returns `true` if no substrings are waiting to be assembled
     bool empty() const;
+
+  private:
+    void _cache_unassembled(Segment& seg);
+    void _assemble();
+    void _handle_overlaped_segment(Segment &segment, const Segment &segment1);
+    static bool _is_overlaped(const Segment& seg1, const Segment& seg2);
+
 };
 
 #endif  // SPONGE_LIBSPONGE_STREAM_REASSEMBLER_HH
